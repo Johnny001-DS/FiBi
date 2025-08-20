@@ -33,12 +33,25 @@ def get_cik_map():
     cik_map = {item['ticker']: str(item['cik_str']).zfill(10) for key, item in all_tickers.items()}
     return cik_map
 
-def fetch_company_facts():
+def fetch_company_facts(tickers_to_fetch=None):
     """
     Fetches company facts data from the SEC EDGAR API for the specified tickers.
+
+    Args:
+        tickers_to_fetch (list, optional): A list of tickers to fetch.
+                                            Defaults to the global TICKERS list.
+
+    Returns:
+        dict: A dictionary where keys are ticker symbols and values are the
+              fetched JSON data.
     """
     # Ensure the data directory exists
     os.makedirs(DATA_DIR, exist_ok=True)
+
+    if tickers_to_fetch is None:
+        tickers_to_fetch = TICKERS
+
+    fetched_data = {}
 
     try:
         logging.info("Fetching CIK map...")
@@ -46,7 +59,7 @@ def fetch_company_facts():
         logging.info("CIK map fetched successfully.")
     except requests.exceptions.RequestException as e:
         logging.error(f"Error fetching CIK map: {e}")
-        return
+        return fetched_data
 
     # Get the API key from the environment variable
     api_key = os.getenv("SEC_API_KEY")
@@ -56,7 +69,7 @@ def fetch_company_facts():
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
-    for ticker in TICKERS:
+    for ticker in tickers_to_fetch:
         cik = cik_map.get(ticker)
         if not cik:
             logging.warning(f"Could not find CIK for ticker: {ticker}")
@@ -84,6 +97,9 @@ def fetch_company_facts():
                 logging.warning(f"No us-gaap facts found for {ticker}. Skipping file save.")
                 continue
 
+            # Store the data for returning
+            fetched_data[ticker] = data
+
             # Save the data to a JSON file
             output_path = os.path.join(DATA_DIR, f"{ticker}.json")
             with open(output_path, "w") as f:
@@ -96,6 +112,8 @@ def fetch_company_facts():
 
         # Respect the SEC's rate limit (10 requests per second)
         time.sleep(0.1)
+
+    return fetched_data
 
 if __name__ == "__main__":
     fetch_company_facts()
